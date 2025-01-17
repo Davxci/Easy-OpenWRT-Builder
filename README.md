@@ -4,7 +4,7 @@
 - Manage your own list(s) of OpenWRT packages
 - Optionally resize default partitions to unlock extra OpenWRT filesystem storage
 - Optionally convert OpenWRT images into into QEMU, Virtualbox, HyperV or VMware images
-- Automated installation of **OpenWRT Imagebuilder** Linux dependencies
+- Automated installation of "OpenWRT Imagebuilder" Linux dependencies
 
 ---
 
@@ -25,7 +25,7 @@
 ## 🛠️ Prerequisites
 
 **Any recent x86 Debian-flavored OS with the sudo package installed should be fine**. 
-- All image building dependencies are automatically installed on first run _(hence sudo package requirement)_.
+- All image building dependencies are automatically installed on first run.
 - Windows subsystem for Linux users have additional steps. See here: https://openwrt.org/docs/guide-developer/toolchain/wsl
 - If building old OpenWRT versions (< = 19.x), using a Linux distro from the same era will save you many troubles with python build machine prerequisities.
 
@@ -53,19 +53,26 @@
 
 It is possible to add a large **persistent** EXT4 data partition that, unike any resized partitions, won't be wiped by a reset or sysupgrade.
 
-1. After image flash or vm launch, create a new vdisk with an EXT4 partition and mount this.
-2. Add this new vdisk/PART-UUID details into the /etc/fstab file.
-3. Next, re-run the build script, this time adding the newly updated /etc/fstab file to `$(pwd)/openwrt_inject_files` when prompted.
-   - The fstab file referencing the new EXT4 partition will now be baked into the new build, making this parition persistent even after a reset or sysupgrade _(see warnings below for more detail)_.
-   -  Note that **OWRT Image Builder on x86 does not support sysupgrade image types**. For x86 you must replace your (virtual machine) OS disk with the new image to upgrade.
+Add a usb drive (or vdisk) with an EXT4 partition and mount this with:
+   ```
+   block detect | uci import fstab
+   uci set fstab.@mount[-1].enabled='1'
+   uci commit fstab
+   reboot
+   ```
+Alternately, see http://routername/cgi-bin/luci/admin/system/mounts to mount the new disk via Luci
+   
+2. Copy the (now updated) OpenWRT `/etc/fstab file`
+4. Re-run the build script, this time adding the copied `/etc/fstab` file to `$(pwd)/openwrt_inject_files` when prompted.
+   - The updated fstab file that references the newly mounted EXT4 partition will now be baked into the new build, making this extra storage persistent after a reset or sysupgrade.
+   -  Note that **OWRT Image Builder does not support sysupgrade for on x86 images**. Instead, for x86 upgrades simply overwite your virtual machine OS disk with a new image.
 
 ---
 
 # ⚠️ WARNING
 
 - **Parition resize should only be used with x86 builds**.
-  - Resize of firmware paritions on non x86 (i.e. router NAND flash memory) **will 99.99999% brick your device!!**
-- **If you modify partition sizes you can no longer use attended-sysupgrade**.
-  - Running sysupgrade with resized partitions will return the default partition schema & will likely brick or break things.
-  - Instead, create new images from your backup config with desired resize settings, then manually re-flash/overwrite OS disk.
+  - Resize of firmware paritions with non x86 (i.e. router NAND flash memory) **will 99.99999% brick your device!!**
+- **If you are an OpenWRT Jedi and you do modify partition sizes on anything other than x86, you will no longer be able to use sysupgrade**.
+  - Running sysupgrade images over a build with resized partitions will return the default partition schema, which will likely be a bad thing. Instead follow the same upgrade method for x86 above.
 
