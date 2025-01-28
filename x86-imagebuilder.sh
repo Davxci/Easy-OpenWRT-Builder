@@ -3,13 +3,15 @@
 # Build and virtualize custom OpenWRT images for x86
 # DO NOT RESIZE NAND ROUTER FLASH PARTITiONS, RESIZE IS FOR x86 BUILDS ONLY!!
 # David Harrop
-# November 2024
+# January 2025
+#
 #######################################################################################################################
 # CUSTOM PACKAGES [ADD YOUR CUSTOM PACKAGE RECIPE HERE]
 #######################################################################################################################
 
-# Basic example recipe, change these to your requirements.
-CUSTOM_PACKAGES="luci-i18n-attendedsysupgrade-fr luci-theme-material luci-mod-rpc liblucihttp0 luci-i18n-dashboard-fr cgi-io luci-lib-base libc mkf2fs opkg libi2c luci-app-opkg kmod-mt7916-firmware ubus libuci20130104 kmod-ixgbe rpcd busybox libiwinfo20230701 luci-lib-ip kmod-nft-fib kmod-nfnetlink libubus-lua kmod-crypto-hash kmod-nf-reject6 nano libiwinfo-lua bnx2-firmware luci-mod-system kmod-nf-flow libnl-tiny1 libustream-wolfssl20201210 kmod-lib-crc-ccitt ucode-mod-uloop getrandom ucode-mod-ubus luci-theme-openwrt r8169-firmware luci-mod-battstatus kmod-pppoe libuuid1 luci-lua-runtime kmod-pppox kmod-nf-reject procd-ujail base-files kmod-nf-nat kmod-input-core luci-nginx kmod-crypto-crc32c ucode-mod-uci partx-utils netifd libf2fs6 libsmartcols1 kmod-r8169 firewall4 dnsmasq procd ubusd ucode-mod-math px5g-wolfssl luci-i18n-battstatus-fr kmod-lib-crc32c luci-mod-status kmod-usb-net-rndis kmod-fs-vfat kmod-nft-nat luci-app-firewall grub2-efi libubus20230605 libblkid1 libmnl0 jansson4 grub2-bios-setup tcpdump odhcp6c fstools uclient-fetch ethtool uci lua grub2 ucode-mod-fs dropbear kmod-nls-utf8 libnftnl11 luci-compat adguardhome kmod-ipvlan kmod-nls-cp437 rpcd-mod-file mtd odhcpd-ipv6only procd-seccomp i2c-tools fail2ban libjson-script20230523 libiwinfo-data ucode rpcd-mod-luci kmod-nf-log urandom-seed libcomerr0 luci-mod-dashboard luci-mod-admin-full luci-base luci-i18n-advanced-reboot-fr logd kmod-nf-log6 luci-i18n-firewall-fr kmod-tg3 luci-proto-ipv6 libwolfssl5.7.2.e624513f openwrt-keyring luci-app-attendedsysupgrade libext2fs2 jshn nftables-json e2fsprogs kmod-e1000 uspotfilter kmod-ppp kmod-nft-offload libss2 hostapd libjson-c5 uhttpd kmod-nf-conntrack usign liblua5.1.5 libblobmsg-json20230523 luci-lib-nixio ucode-mod-rtnl ca-bundle kmod-forcedeth libuclient20201210 liblucihttp-lua luci-lib-json kmod-nls-iso8859-1 luci-lib-jsonc kmod-amd-xgbe luci kmod-nf-conntrack6 ubox kmod-amazon-ena kernel kmod-e1000e luci-i18n-ahcp-fr rpcd-mod-iwinfo luci-mod-network kmod-nft-core libucode20230711 kmod-button-hotplug kmod-nls-base fwtool luci-i18n-opkg-fr jsonfilter libubox20230523 luci-i18n-base-fr kmod-igb kmod-igc kmod-bnx2 urngd kmod-slhc luci-app-ahcp "
+# Basic example recipe, change to suit.
+CUSTOM_PACKAGES="blockd block-mount kmod-fs-ext4 kmod-fs-ntfs3 kmod-usb2 kmod-usb3 kmod-usb-storage kmod-usb-core \
+    luci luci-app-ddns luci-app-samba4 luci-app-sqm sqm-scripts curl nano kmod-mt7915-firmware kmod-mt7915e kmod-mt7916-firmware kmod-mt76-connac"
 
 #######################################################################################################################
 
@@ -69,8 +71,8 @@ clear
     MOD_PARTSIZE=""          # true/false
     KERNEL_PARTSIZE=""       # variable set in MB
     ROOT_PARTSIZE=""         # variable set in MB (values over 8192 may give memory exhaustion errors)
-    KERNEL_RESIZE_DEF="32"   # OWRT default is 32 MB - don't change this without a specific reason.
-    ROOT_RESIZE_DEF="104"    # OWRT default is 104 MB. Don't go above 8192.
+    KERNEL_RESIZE="32"       # OWRT default is 32 MB - don't change this without a specific reason.
+    ROOT_RESIZE="104"        # OWRT default is 104 MB. Don't go above 8192.
     IMAGE_TAG=""             # ID tag is added to the completed image filename to uniquely identify the built image(s)
     CREATE_VM=""             # Create VMware images of the final build true/false
     RELEASE_URL="https://downloads.openwrt.org/releases/" # Where to obtain latest stable version number
@@ -81,7 +83,7 @@ if [[ -z ${VERSION} ]]; then
     echo
     echo -e "${CYAN}Enter OpenWRT version to build:${NC}"
     while true; do
-        read -p "    Enter a release version number (latest stable release = $LATEST_RELEASE), or hit enter for latest snapshot: " VERSION
+        read -p "    Enter release version (latest stable release = $LATEST_RELEASE) [or hit enter for current snapshot] : " VERSION
         [[ "${VERSION}" = "" ]] || [[ "${VERSION}" != "" ]] && break
     done
     echo
@@ -90,7 +92,7 @@ fi
 # Prompt to resize image partitions only if x86
 if [[ -z ${MOD_PARTSIZE} ]] && [[ ${IMAGE_PROFILE} = "generic" ]]; then
     echo -e "${CYAN}Modify OpenWRT Partitions (x86 ONLY!):${NC}"
-    echo -e -n "    Modify partition sizes? [ y = resize | n = no changes (default) ] [y/N]: "
+    echo -e -n "    Modify partition sizes? [ n = no change (default) ] [y/n]: "
     read PROMPT
     if [[ ${PROMPT} =~ ^[Yy]$ ]]; then
         MOD_PARTSIZE=true
@@ -102,19 +104,19 @@ fi
 # Set custom partition sizes only if x86
 if [[ ${MOD_PARTSIZE} = true ]] && [[ ${IMAGE_PROFILE} = "generic" ]]; then
     [[ -z ${KERNEL_PARTSIZE} ]] &&
-        read -p "    x86 ONLY!: Enter KERNEL partition MB [OWRT default is 32 - hit enter for ${KERNEL_RESIZE_DEF}, or enter custom size]: " KERNEL_PARTSIZE
+        read -p "    x86 ONLY!: Enter KERNEL partition in MB [or hit enter for default]: " KERNEL_PARTSIZE
     [[ -z ${ROOT_PARTSIZE} ]] &&
-        read -p "    x86 ONLY!: Enter ROOT partition MB between 104 & 8192 [OWRT default is 104 - hit enter for ${ROOT_RESIZE_DEF}, or enter custom size]: " ROOT_PARTSIZE
+        read -p "    x86 ONLY!: Enter ROOT partition in MB (between 104 & 8192) [or hit enter for default]: " ROOT_PARTSIZE
 fi
 
-# If no kernel partition size value given, create a default value
+# If no kernel partition size value given, use the script default value
 if [[ ${MOD_PARTSIZE} = true ]] && [[ -z ${KERNEL_PARTSIZE} ]] && [[ ${IMAGE_PROFILE} = "generic" ]]; then
-    KERNEL_PARTSIZE=$KERNEL_RESIZE_DEF
+    KERNEL_PARTSIZE=$KERNEL_RESIZE
    fi
    
-# If no root partition size value given, create a default value
+# If no root partition size value given, use the script default value
 if [[ ${MOD_PARTSIZE} = true ]] && [[ -z ${ROOT_PARTSIZE} ]] && [[ ${IMAGE_PROFILE} = "generic" ]]; then
-    ROOT_PARTSIZE=$ROOT_RESIZE_DEF
+    ROOT_PARTSIZE=$ROOT_RESIZE
 fi
 
 # Create a custom image name tag
@@ -122,20 +124,20 @@ if [[ -z ${IMAGE_TAG} ]]; then
     echo
     echo -e "${CYAN}Custom image filename identifier:${NC}"
     while true; do
-        read -p "    Enter text to include in the image filename [Enter for \"custom\"]: " IMAGE_TAG
+        read -p "    Enter text for inclusion in image filename [hit enter for \"my-custom-router\"]: " IMAGE_TAG
         [[ "${IMAGE_TAG}" = "" ]] || [[ "${IMAGE_TAG}" != "" ]] && break
     done
 fi
 # If no image name tag is given, create a default value
 if [[ -z ${IMAGE_TAG} ]]; then
-    IMAGE_TAG="custom"
+    IMAGE_TAG="my-custom-router"
 fi
 
 # Convert images for use in virtual environment?"
 if [[ -z ${CREATE_VM} ]] && [[ ${IMAGE_PROFILE} = "generic" ]]; then
     echo
     echo -e "${CYAN}Virtual machine image conversion:${NC}"
-    echo -e -n "    x86 ONLY!: Convert new OpenWRT images to a virtual machine format? [default = n] [y/N]: "
+    echo -e -n "    x86 ONLY!: Convert images for virtual machine use? [default = n] [y/N]: "
     read PROMPT
     if [[ ${PROMPT} =~ ^[Yy]$ ]]; then
         CREATE_VM=true
@@ -147,7 +149,7 @@ fi
 # Display the VM conversion menu
 echo
 show_menu() {
-    echo "    Select VM conversion format:"
+    echo "    Select VM image format:"
     echo "    1) QEMU...............: qcow2"
     echo "    2) QEMU Enhanced......: eqd"
     echo "    3) Oracle Virutalbox..: vdi"
@@ -242,11 +244,11 @@ mkdir -p "${INJECT_FILES}"
 if [[ ${CREATE_VM} = true ]] && [[ ${IMAGE_PROFILE} = "generic" ]]; then mkdir -p "${VMDIR}" ; fi
 
 # Option to pre-configure images with injected config files
-echo -e "${LYELLOW}"
-echo -e "    [Optional] TO BAKE A CUSTOM CONFIG INTO YOUR OWRT IMAGE"
-echo -e "    copy your OWRT backup config files to ${CYAN}${INJECT_FILES}${LYELLOW} before hitting enter..."
+echo -e "${CYAN}"
+echo -e "    [Optional] TO BAKE YOUR CUSTOM CONFIG INTO NEW OWRT IMAGES:"
+echo -e "    Copy unzipped OpenWRT backup config files to ${CYAN}${INJECT_FILES}${LYELLOW} before hitting enter..."
 echo
-read -p "    Press ENTER to begin the OWRT build..."
+read -p "    Press ENTER to begin the OpenWRT build..."
 echo -e "${NC}"
 
 # Install OWRT build system dependencies for recent Ubuntu/Debian.
